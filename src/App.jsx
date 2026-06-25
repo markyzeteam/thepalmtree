@@ -443,25 +443,21 @@ export default function App() {
         const srcDoc = await PDFDocument.load(await file.arrayBuffer());
         const totalPages = srcDoc.getPageCount();
 
-        let companies;
-        if (totalPages <= 4) {
-          companies = await callAPI(b64);
-        } else {
-          setStatus(`${file.name} has ${totalPages} pages — processing in chunks…`);
-          const chunks = await splitPDFToChunks(file, 3);
-          const chunkResults = [];
-          for (let c = 0; c < chunks.length; c++) {
-            setStatus(`${file.name} (${location}): pages ${chunks[c].pages} (${c + 1}/${chunks.length})…`);
-            try {
-              const cos = await callAPI(chunks[c].b64);
-              chunkResults.push(...cos);
-            } catch (chunkErr) {
-              console.warn(`Chunk ${chunks[c].pages} failed:`, chunkErr);
-            }
+        // Always process in chunks to avoid timeouts
+        setStatus(`${file.name} (${location}): splitting into chunks…`);
+        const chunks = await splitPDFToChunks(file, 3);
+        const chunkResults = [];
+        for (let c = 0; c < chunks.length; c++) {
+          setStatus(`${file.name} (${location}): pages ${chunks[c].pages} (${c + 1}/${chunks.length})…`);
+          try {
+            const cos = await callAPI(chunks[c].b64);
+            chunkResults.push(...cos);
+          } catch (chunkErr) {
+            console.warn(`Chunk ${chunks[c].pages} failed:`, chunkErr.message);
           }
-          if (chunkResults.length === 0) throw new Error("All chunks failed to process");
-          companies = chunkResults;
         }
+        if (chunkResults.length === 0) throw new Error(`All ${chunks.length} chunks failed — check API key in Vercel settings`);
+        const companies = chunkResults;
 
         // Tag each company with the assigned location
         companies.forEach(co => {
