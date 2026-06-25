@@ -378,18 +378,20 @@ export default function App() {
       });
     } catch (fetchErr) {
       clearTimeout(timeout);
-      throw new Error(`Network error: ${fetchErr.message}`);
+      const isTimeout = fetchErr.name === "AbortError";
+      throw new Error(isTimeout ? `Request timed out after 55s — try a smaller PDF or check your API key` : `Network error: ${fetchErr.message}`);
     }
     clearTimeout(timeout);
     let data;
     try { data = await resp.json(); }
-    catch (e) { throw new Error(`Server error (status ${resp.status})`); }
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    if (!data.content) throw new Error(`Unexpected response: ${JSON.stringify(data).slice(0, 200)}`);
+    catch (e) { throw new Error(`Server returned non-JSON (status ${resp.status}) — check Vercel function logs`); }
+    if (data.error) throw new Error(`API error: ${data.error.message || JSON.stringify(data.error)}`);
+    if (!data.content) throw new Error(`Unexpected API response: ${JSON.stringify(data).slice(0, 300)}`);
     const raw = (data.content || []).map(c => c.text || "").join("").trim();
+    if (!raw) throw new Error("API returned empty response — check ANTHROPIC_API_KEY in Vercel settings");
     const clean = raw.replace(/```json|```/g, "").trim();
     const arrStr = clean.substring(clean.indexOf("["), clean.lastIndexOf("]") + 1);
-    if (!arrStr) throw new Error(`No JSON array found. Got: ${raw.slice(0, 300)}`);
+    if (!arrStr) throw new Error(`No JSON array in response. Raw: ${raw.slice(0, 400)}`);
     return JSON.parse(arrStr);
   };
 
