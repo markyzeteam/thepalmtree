@@ -447,16 +447,19 @@ export default function App() {
         setStatus(`${file.name} (${location}): splitting into chunks…`);
         const chunks = await splitPDFToChunks(file, 3);
         const chunkResults = [];
+        let lastChunkError = "";
         for (let c = 0; c < chunks.length; c++) {
           setStatus(`${file.name} (${location}): pages ${chunks[c].pages} (${c + 1}/${chunks.length})…`);
           try {
             const cos = await callAPI(chunks[c].b64);
             chunkResults.push(...cos);
           } catch (chunkErr) {
-            console.warn(`Chunk ${chunks[c].pages} failed:`, chunkErr.message);
+            lastChunkError = chunkErr.message;
+            setStatus(`Chunk ${chunks[c].pages} error: ${chunkErr.message.slice(0, 100)}`);
+            await new Promise(r => setTimeout(r, 2000)); // show error for 2s
           }
         }
-        if (chunkResults.length === 0) throw new Error(`All ${chunks.length} chunks failed — check API key in Vercel settings`);
+        if (chunkResults.length === 0) throw new Error(lastChunkError || `All ${chunks.length} chunks failed`);
         const companies = chunkResults;
 
         // Tag each company with the assigned location
